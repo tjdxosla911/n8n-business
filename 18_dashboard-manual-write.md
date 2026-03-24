@@ -9,8 +9,9 @@ n8n 워크플로우 없이 대시보드에서 직접 콘텐츠 작성 및 이미
 
 | 기능 | 위치 | 설명 |
 |---|---|---|
-| 새 글 작성 | 목록 페이지 헤더 | 모달로 콘텐츠 직접 작성 + 이미지 첨부 |
+| 새 글 작성 | 목록 페이지 헤더 | 모달로 콘텐츠 직접 작성 + 이미지 첨부 + 썸네일 미리보기 |
 | 이미지 수동 등록 | 콘텐츠 상세 페이지 | 기존 콘텐츠에 이미지 추가 업로드 |
+| 이미지 삭제 | 콘텐츠 상세 페이지 | 이미지 hover 시 X 버튼 → DB + 실제 파일 동시 삭제 |
 
 ---
 
@@ -70,11 +71,35 @@ app.post('/contents/:id/image', upload.array('images', 10), (req, res) => {
 - 입력 필드: 제목(필수), 본문, 해시태그, 상품명, 요청자, 플랫폼, 이미지 첨부(다중)
 - `enctype="multipart/form-data"` 설정
 
-### views/detail.ejs - 이미지 업로드 섹션
+### views/index.ejs - 모달 이미지 미리보기
+
+- 이미지 선택 시 JS로 썸네일 즉시 표시
+- "N개 파일 선택됨" 텍스트로 선택 수 확인 가능
+- 모달 닫으면 미리보기 초기화
+
+### views/detail.ejs - 이미지 업로드 + 삭제
 
 - 편집 폼 위에 이미지 업로드 섹션 추가
 - 다중 이미지 선택 가능 (최대 10장)
 - 기존 이미지에 누적 추가됨
+- 이미지 hover 시 빨간 X 버튼 표시 → 클릭 시 파일 + DB 동시 삭제
+
+**POST /contents/:id/image/delete** — 이미지 삭제
+
+```js
+app.post('/contents/:id/image/delete', (req, res) => {
+  // 실제 파일 삭제
+  const filename = targetUrl.split('/uploads/')[1];
+  const filePath = path.join(__dirname, 'public', 'uploads', filename);
+  if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+
+  // DB에서 해당 URL 제거
+  const remaining = content.image_url
+    .split(',').map(u => u.trim()).filter(u => u && u !== targetUrl);
+  db.prepare('UPDATE contents SET image_url = ? WHERE id = ?')
+    .run(remaining.length ? remaining.join(', ') : null, req.params.id);
+});
+```
 
 ---
 
